@@ -1,183 +1,232 @@
 import React, { useEffect, useState } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
 import { useAuth } from '../components/AuthProvider'
 import { LoaderCircleIcon, UserIcon, EditIcon, TrashIcon, FilterIcon, BriefcaseIcon } from 'lucide-react'
-import { createJobApplication, deleteJobApplication, getAllJobApplications, updateJobStatus } from '../components/crud';
+import { createJobApplication, deleteJobApplication, getAllJobApplications, updateJobStatus } from '../components/crud'
+import { addJob, deleteJob, updateJob, setFilter, clearAllJobs } from '../store/job'
 
 const Profile = () => {
-  const { user, loading } = useAuth();
-  const [jobs, setJobs] = useState([]);
-  const [filteredJobs, setFilteredJobs] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [editingJob, setEditingJob] = useState(null);
+  const { user, loading } = useAuth()
+  const dispatch = useDispatch()
+  
+  // Redux state
+  const { jobs, filters } = useSelector(state => state.jobs)
+  
+  // Local state
+  const [isLoading, setIsLoading] = useState(true)
+  const [editingJob, setEditingJob] = useState(null)
   const [jobData, setJobData] = useState({
     company: '',
     position: '',
     status: '',
-  });
+  })
+
+  // Filter jobs based on Redux filters and user ownership
+  const filteredJobs = jobs.filter(job => {
+    // First filter by user ownership
+    const jobBelongsToUser = job.uid === user?.uid || 
+                            job.userId === user?.uid || 
+                            job.user_id === user?.uid ||
+                            job.createdBy === user?.uid
+
+    if (!jobBelongsToUser) return false
+
+    // Then filter by status
+    if (filters.status !== 'all' && job.status !== filters.status) return false
+    
+    // Filter by company if needed
+    if (filters.company && !job.company.toLowerCase().includes(filters.company.toLowerCase())) return false
+    
+    return true
+  })
 
   const handleCreateJob = async (e, jobData) => {
     if (!user || !user.uid) {
-      console.error('User not authenticated');
-      return;
+      console.error('User not authenticated')
+      return
     }
-    e.preventDefault();
+    e.preventDefault()
     try {
-      const jobDataWithUserId = { ...jobData, uid: user.uid };
-      await createJobApplication(jobDataWithUserId);
+      const jobDataWithUserId = { ...jobData, uid: user.uid }
+      const createdJob = await createJobApplication(jobDataWithUserId)
+      
+      // Add to Redux store with the returned job data (including ID from database)
+      dispatch(addJob({
+        ...jobDataWithUserId,
+        id: createdJob.id || Date.now().toString(), // Use DB ID or fallback
+        createdAt: new Date().toISOString()
+      }))
+      
       setJobData({
         company: '',
         position: '',
         status: ''
-      });
-      await loadJobs();
+      })
     } catch (error) {
-      console.error('Failed to create job ', error);
+      console.error('Failed to create job ', error)
     }
-  };
+  }
 
   const handleStatusUpdate = async (id, newStatus) => {
     if (!user || !user.uid) {
-      console.error('User not authenticated');
-      return;
+      console.error('User not authenticated')
+      return
     }
 
     try {
-      await updateJobStatus(id, newStatus);
-      await loadJobs(); // Reload jobs after status update
+      await updateJobStatus(id, newStatus)
+      
+      // Update Redux store
+      dispatch(updateJob({
+        id: id,
+        updates: { status: newStatus }
+      }))
     } catch (error) {
-      console.error("Failed to update status: ", error);
+      console.error("Failed to update status: ", error)
     }
-  };
+  }
 
   const loadJobs = async () => {
     if (!user || !user.uid) {
-      setIsLoading(false);
-      return;
+      setIsLoading(false)
+      return
     }
 
     try {
-      const allJobs = await getAllJobApplications();
-      console.log('All jobs from database:', allJobs);
-      console.log('Current user UID:', user.uid);
+      const allJobs = await getAllJobApplications()
+      console.log('All jobs from database:', allJobs)
+      console.log('Current user UID:', user.uid)
       
       // Debug: Check the structure of jobs
       if (allJobs.length > 0) {
-        console.log('First job structure:', allJobs[0]);
-        console.log('Available keys in first job:', Object.keys(allJobs[0]));
+        console.log('First job structure:', allJobs[0])
+        console.log('Available keys in first job:', Object.keys(allJobs[0]))
       }
       
       // Filter jobs to show only current user's applications
-      // Check multiple possible field names for user ID
       const userJobs = allJobs.filter(job => {
         return job.uid === user.uid || 
                job.userId === user.uid || 
                job.user_id === user.uid ||
-               job.createdBy === user.uid;
-      });
+               job.createdBy === user.uid
+      })
       
-      console.log('Filtered user jobs:', userJobs);
-      console.log('User jobs count:', userJobs.length);
+      console.log('Filtered user jobs:', userJobs)
+      console.log('User jobs count:', userJobs.length)
       
-      setJobs(userJobs);
+      // Clear existing jobs and add all user jobs to Redux
+      dispatch(clearAllJobs())
+      userJobs.forEach(job => {
+        dispatch(addJob({
+          ...job,
+          id: job.id || Date.now().toString(),
+          createdAt: job.createdAt || new Date().toISOString()
+        }))
+      })
     } catch (error) {
-      console.error("Failed to load jobs: ", error);
+      console.error("Failed to load jobs: ", error)
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   const handleDeleteJobs = async (jobId) => {
     if (!user || !user.uid) {
-      console.error('User not authenticated');
-      return;
+      console.error('User not authenticated')
+      return
     }
     try {
-      await deleteJobApplication(jobId);
-      await loadJobs(); // Reload jobs after deletion
+      await deleteJobApplication(jobId)
+      
+      // Remove from Redux store
+      dispatch(deleteJob(jobId))
     } catch (error) {
-      console.error("Error deleting the job application ", error);
+      console.error("Error deleting the job application ", error)
     }
-  };
+  }
 
   const handleEditJob = (job) => {
     // Check multiple possible field names for user ID
     const jobBelongsToUser = job.uid === user.uid || 
                             job.userId === user.uid || 
                             job.user_id === user.uid ||
-                            job.createdBy === user.uid;
+                            job.createdBy === user.uid
     
     if (!jobBelongsToUser) {
-      console.error('Unauthorized: Cannot edit job application');
-      return;
+      console.error('Unauthorized: Cannot edit job application')
+      return
     }
     
-    setEditingJob(job);
+    setEditingJob(job)
     setJobData({
       company: job.company,
       position: job.position,
       status: job.status
-    });
-  };
+    })
+  }
 
   const handleUpdateJob = async (e) => {
     if (!user || !user.uid || !editingJob) {
-      console.error('User not authenticated or no job selected');
-      return;
+      console.error('User not authenticated or no job selected')
+      return
     }
     
     // Verify the job belongs to the current user
     const jobBelongsToUser = editingJob.uid === user.uid || 
                             editingJob.userId === user.uid || 
                             editingJob.user_id === user.uid ||
-                            editingJob.createdBy === user.uid;
+                            editingJob.createdBy === user.uid
     
     if (!jobBelongsToUser) {
-      console.error('Unauthorized: Cannot update job application');
-      return;
+      console.error('Unauthorized: Cannot update job application')
+      return
     }
     
-    e.preventDefault();
+    e.preventDefault()
     try {
-      await updateJobStatus(editingJob.id, jobData.status);
+      await updateJobStatus(editingJob.id, jobData.status)
       
-      setEditingJob(null);
+      // Update Redux store
+      dispatch(updateJob({
+        id: editingJob.id,
+        updates: { 
+          company: jobData.company,
+          position: jobData.position,
+          status: jobData.status 
+        }
+      }))
+      
+      setEditingJob(null)
       setJobData({
         company: '',
         position: '',
         status: ''
-      });
-      await loadJobs();
+      })
     } catch (error) {
-      console.error('Failed to update job ', error);
+      console.error('Failed to update job ', error)
     }
-  };
+  }
 
   const cancelEdit = () => {
-    setEditingJob(null);
+    setEditingJob(null)
     setJobData({
       company: '',
       position: '',
       status: ''
-    });
-  };
+    })
+  }
 
-  // Filter jobs based on status
-  useEffect(() => {
-    if (filterStatus === 'all') {
-      setFilteredJobs(jobs);
-    } else {
-      setFilteredJobs(jobs.filter(job => job.status === filterStatus));
-    }
-  }, [jobs, filterStatus]);
+  const handleFilterChange = (filterType, value) => {
+    dispatch(setFilter({ filterType, value }))
+  }
 
   useEffect(() => {
     if (user && user.uid) {
-      loadJobs();
+      loadJobs()
     } else if (!loading) {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  }, [user, loading]);
+  }, [user, loading])
 
   // Show loading while auth is loading
   if (loading || isLoading) {
@@ -185,7 +234,7 @@ const Profile = () => {
       <div className="flex justify-center items-center min-h-screen">
         <LoaderCircleIcon className='animate-spin' size={48} />
       </div>
-    );
+    )
   }
 
   // Show message if user is not authenticated
@@ -197,8 +246,16 @@ const Profile = () => {
           <p className="text-gray-500 text-lg">Please log in to view your profile</p>
         </div>
       </div>
-    );
+    )
   }
+
+  // Get user-specific jobs for statistics (filter by user ownership)
+  const userJobs = jobs.filter(job => {
+    return job.uid === user.uid || 
+           job.userId === user.uid || 
+           job.user_id === user.uid ||
+           job.createdBy === user.uid
+  })
 
   return (
     <div className='min-h-screen py-8 '>
@@ -218,7 +275,7 @@ const Profile = () => {
               <div className="flex items-center gap-2 mt-2">
                 <BriefcaseIcon size={16} className="text-gray-500" />
                 <span className="text-sm text-gray-500">
-                  {jobs.length} Job Application{jobs.length !== 1 ? 's' : ''}
+                  {userJobs.length} Job Application{userJobs.length !== 1 ? 's' : ''}
                 </span>
               </div>
             </div>
@@ -228,19 +285,19 @@ const Profile = () => {
         {/* Job Applications Statistics */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg p-4 shadow-lg text-center">
-            <div className="text-2xl font-bold text-blue-500">{jobs.filter(job => job.status === 'applied').length}</div>
+            <div className="text-2xl font-bold text-blue-500">{userJobs.filter(job => job.status === 'applied').length}</div>
             <div className="text-sm text-gray-600">Applied</div>
           </div>
           <div className="bg-white rounded-lg p-4 shadow-lg text-center">
-            <div className="text-2xl font-bold text-yellow-500">{jobs.filter(job => job.status === 'interviewed').length}</div>
+            <div className="text-2xl font-bold text-yellow-500">{userJobs.filter(job => job.status === 'interviewed').length}</div>
             <div className="text-sm text-gray-600">Interviewed</div>
           </div>
           <div className="bg-white rounded-lg p-4 shadow-lg text-center">
-            <div className="text-2xl font-bold text-green-500">{jobs.filter(job => job.status === 'hired').length}</div>
+            <div className="text-2xl font-bold text-green-500">{userJobs.filter(job => job.status === 'hired').length}</div>
             <div className="text-sm text-gray-600">Hired</div>
           </div>
           <div className="bg-white rounded-lg p-4 shadow-lg text-center">
-            <div className="text-2xl font-bold text-red-500">{jobs.filter(job => job.status === 'rejected').length}</div>
+            <div className="text-2xl font-bold text-red-500">{userJobs.filter(job => job.status === 'rejected').length}</div>
             <div className="text-sm text-gray-600">Rejected</div>
           </div>
         </div>
@@ -257,8 +314,8 @@ const Profile = () => {
               <FilterIcon size={20} className="text-gray-600" />
               <select 
                 className='select text-primary-content bg-slate-200 border border-gray-300 text-sm sm:text-base min-w-[140px]'
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
+                value={filters.status}
+                onChange={(e) => handleFilterChange('status', e.target.value)}
               >
                 <option value="all">All Status</option>
                 <option value="applied">Applied</option>
@@ -274,10 +331,10 @@ const Profile = () => {
             <div className="text-center py-12">
               <BriefcaseIcon size={48} className="mx-auto text-gray-400 mb-4" />
               <p className="text-gray-500 text-lg">
-                {jobs.length === 0 ? 'No job applications yet' : 'No applications match the selected filter'}
+                {userJobs.length === 0 ? 'No job applications yet' : 'No applications match the selected filter'}
               </p>
               <p className="text-gray-400 text-sm">
-                {jobs.length === 0 ? 'Create your first job application below' : 'Try selecting a different status filter'}
+                {userJobs.length === 0 ? 'Create your first job application below' : 'Try selecting a different status filter'}
               </p>
             </div>
           ) : (
