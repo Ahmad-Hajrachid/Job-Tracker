@@ -13,12 +13,14 @@ import AppRoutes from './AppRoutes' // Create this component
 import {store, persistor} from './store/store'
 import { PersistGate } from 'redux-persist/integration/react'
 import {Provider} from 'react-redux'
+import { Toaster } from 'react-hot-toast'
 const App = () => {
   return (
     <Provider store={store}>
       <PersistGate persistor={persistor}>
     <AuthProvider>
       <AppRoutes />
+      <Toaster/>
     </AuthProvider>
     </PersistGate>
     </Provider>
