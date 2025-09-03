@@ -38,7 +38,7 @@ const Header = () => {
         </div>
         
         <nav>
-          <ul>
+          <ul className='flex justify-center items-center gap-8'>
             {user && role === 'admin' && ( // only show if admin
               <li>
                 <Link 
@@ -49,6 +49,27 @@ const Header = () => {
                 </Link>
               </li>
             )}
+            {user ? (
+            <>
+              <Link 
+                className='relative transition-colors duration-200 after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-0 after:bg-black after:transition-all after:duration-300 hover:after:w-full' 
+                to={`/resume-evaluate`}
+              >
+                Evaluate Resume
+              </Link>
+            </>
+          ) :(null)}
+
+          {user ? (
+            <>
+              <Link 
+                className='relative transition-colors duration-200 after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-0 after:bg-black after:transition-all after:duration-300 hover:after:w-full' 
+                to={`/Job-Analyze`}
+              >
+                Job Analysis
+              </Link>
+            </>
+          ) :(null)}
           </ul>
         </nav>
         

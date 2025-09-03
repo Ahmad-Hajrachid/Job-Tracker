@@ -10,6 +10,8 @@ import Profile from './pages/Profile'
 import DashBoard from './pages/DashBoard'
 import NotFound from './pages/NotFound'
 import { getUserRole } from './components/crud'
+import Resume from './pages/Resume'
+import Analyze from './pages/Analyze'
 
 const AppRoutes = () => {
   const { user, loading } = useAuth();
@@ -39,6 +41,8 @@ const AppRoutes = () => {
         <Route path='/dashboard' element={user?<Profile/>:<Login/>}/>
         <Route path={`/profile/:id`} element={user?<Profile/>:<Login/>}/>
         <Route path={`/profile/`} element={user?<Profile/>:<Login/>}/>
+        <Route path={`/resume-evaluate/`} element={user?<Resume/>:<Login/>}/>
+        <Route path={`/Job-Analyze/`} element={user?<Analyze/>:<Login/>}/>
       </Route>
       <Route path='/login' element={user?<Profile/>:<Login/>} />
       <Route path='/register' element={<Register/>} />
