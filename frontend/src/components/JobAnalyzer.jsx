@@ -27,7 +27,7 @@ After the structured data above, provide a detailed analysis explaining your fin
   },
     maxMessages:20
   })
-
+  
   const parseAnalysis = (content) => {
   const skillsMatch = content.match(/SKILLS: (.*)/);
   const keywordsMatch = content.match(/KEYWORDS: (.*)/);

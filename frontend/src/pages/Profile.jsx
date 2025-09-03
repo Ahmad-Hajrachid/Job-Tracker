@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useAuth } from '../components/AuthProvider'
-import { LoaderCircleIcon, UserIcon, EditIcon, TrashIcon, FilterIcon, BriefcaseIcon } from 'lucide-react'
+import { LoaderCircleIcon, UserIcon, EditIcon, TrashIcon, FilterIcon, BriefcaseIcon, BotIcon } from 'lucide-react'
 import { createJobApplication, deleteJobApplication, getAllJobApplications, updateJobStatus } from '../components/crud'
 import { addJob, deleteJob, updateJob, setFilter, clearAllJobs } from '../store/job'
+import useChat from '../Hooks/useChat'
+import MarkdownRenderer from '../components/MarkdownRenderer' // Assuming this is the correct import
 
 const Profile = () => {
   const { user, loading } = useAuth()
@@ -20,6 +22,55 @@ const Profile = () => {
     position: '',
     status: '',
   })
+  const [aiInsight, setAiInsight] = useState(null)
+  const [loadingInsight, setLoadingInsight] = useState(false)
+
+  // Get user-specific jobs for statistics (filter by user ownership)
+  const userJobs = jobs.filter(job => {
+    return job.uid === user?.uid || 
+           job.userId === user?.uid || 
+           job.user_id === user?.uid ||
+           job.createdBy === user?.uid
+  })
+
+  // Initialize chat hook with dynamic system message
+  const {messages, sendMessage} = useChat({
+    system: {
+      role: "system",
+      content: `Your job is to give insights about these jobs:
+${userJobs.map(job => `- Company: ${job.company}, Position: ${job.position}, Status: ${job.status}`).join('\n')}
+
+Give the answer in a way where you tell the user a message like this: "You applied for 7 jobs this month, got 3 interviews! Data analyst roles have been the highest success rate for you." but based on the data I just gave you. 
+
+Provide actionable insights, trends, and encouraging feedback about their job application journey. Keep it concise but informative.`
+    },
+    maxMessages: 20
+  })
+
+  // Function to generate AI insights
+  const generateInsights = async () => {
+    if (userJobs.length === 0) return
+    
+    setLoadingInsight(true)
+    try {
+      // Send a message to get insights
+      await sendMessage("Please provide insights about my job applications.")
+      
+      // Wait a moment for the response to be processed
+      setTimeout(() => {
+        setLoadingInsight(false)
+      }, 2000)
+    } catch (error) {
+      console.error("Failed to generate insights:", error)
+      setLoadingInsight(false)
+    }
+  }
+
+  // Get the first AI response (excluding system message)
+  const getAIInsight = () => {
+    const assistantMessages = messages.filter(msg => msg.role === 'assistant')
+    return assistantMessages.length > 0 ? assistantMessages[0].content : null
+  }
 
   // Filter jobs based on Redux filters and user ownership
   const filteredJobs = jobs.filter(job => {
@@ -62,6 +113,9 @@ const Profile = () => {
         position: '',
         status: ''
       })
+
+      // Generate new insights after creating a job
+      setTimeout(() => generateInsights(), 1000)
     } catch (error) {
       console.error('Failed to create job ', error)
     }
@@ -81,6 +135,9 @@ const Profile = () => {
         id: id,
         updates: { status: newStatus }
       }))
+
+      // Generate new insights after status update
+      setTimeout(() => generateInsights(), 1000)
     } catch (error) {
       console.error("Failed to update status: ", error)
     }
@@ -104,25 +161,28 @@ const Profile = () => {
       }
       
       // Filter jobs to show only current user's applications
-      const userJobs = allJobs.filter(job => {
+      const userJobsData = allJobs.filter(job => {
         return job.uid === user.uid || 
                job.userId === user.uid || 
                job.user_id === user.uid ||
                job.createdBy === user.uid
       })
       
-      console.log('Filtered user jobs:', userJobs)
-      console.log('User jobs count:', userJobs.length)
+      console.log('Filtered user jobs:', userJobsData)
+      console.log('User jobs count:', userJobsData.length)
       
       // Clear existing jobs and add all user jobs to Redux
       dispatch(clearAllJobs())
-      userJobs.forEach(job => {
+      userJobsData.forEach(job => {
         dispatch(addJob({
           ...job,
           id: job.id || Date.now().toString(),
           createdAt: job.createdAt || new Date().toISOString()
         }))
       })
+
+      // Generate insights after loading jobs
+      setTimeout(() => generateInsights(), 1000)
     } catch (error) {
       console.error("Failed to load jobs: ", error)
     } finally {
@@ -140,6 +200,9 @@ const Profile = () => {
       
       // Remove from Redux store
       dispatch(deleteJob(jobId))
+
+      // Generate new insights after deleting a job
+      setTimeout(() => generateInsights(), 1000)
     } catch (error) {
       console.error("Error deleting the job application ", error)
     }
@@ -202,6 +265,9 @@ const Profile = () => {
         position: '',
         status: ''
       })
+
+      // Generate new insights after updating a job
+      setTimeout(() => generateInsights(), 1000)
     } catch (error) {
       console.error('Failed to update job ', error)
     }
@@ -249,18 +315,44 @@ const Profile = () => {
     )
   }
 
-  // Get user-specific jobs for statistics (filter by user ownership)
-  const userJobs = jobs.filter(job => {
-    return job.uid === user.uid || 
-           job.userId === user.uid || 
-           job.user_id === user.uid ||
-           job.createdBy === user.uid
-  })
+  const currentInsight = getAIInsight()
 
   return (
     <div className='min-h-screen py-8 '>
       <div className="bg-gray-50 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 p-4 rounded-xl">
         
+        {/* AI Insights Section */}
+        {userJobs.length > 0 && (
+          <div className="rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-4 sm:p-6 lg:p-8 shadow-lg">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                <BotIcon size={20} className="text-white" />
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
+                AI Career Insights
+              </h2>
+              {loadingInsight && (
+                <LoaderCircleIcon className="animate-spin text-blue-500" size={20} />
+              )}
+            </div>
+            
+            <div className="bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-blue-100">
+              {currentInsight ? (
+                <MarkdownRenderer content={currentInsight} />
+              ) : loadingInsight ? (
+                <div className="flex items-center gap-3 text-gray-600">
+                  <LoaderCircleIcon className="animate-spin" size={16} />
+                  <span>Analyzing your job applications...</span>
+                </div>
+              ) : (
+                <div className="text-gray-500 italic">
+                  AI insights will appear here once your job data is analyzed.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Profile Header */}
         <div className="rounded-lg bg-white p-4 sm:p-6 lg:p-8 shadow-lg">
           <div className="flex items-center gap-4">
